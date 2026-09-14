@@ -13,7 +13,27 @@ const CATEGORIES = [
 ];
 
 function searchItems({ q, category, kind }) {
-  let sql = `
+  const clauses = ["items.status != 'removed'"];
+  const params = [];
+
+  if (q) {
+    clauses.push(`(
+      items.title || ' ' || items.description || ' ' || items.location
+    ) LIKE ?`);
+    params.push(`%${q}%`);
+  }
+
+  if (category && category !== "all") {
+    clauses.push("items.category = ?");
+    params.push(category);
+  }
+
+  if (kind && kind !== "all") {
+    clauses.push("items.kind = ?");
+    params.push(kind);
+  }
+
+  const sql = `
     SELECT
       items.id,
       items.user_id,
@@ -28,23 +48,12 @@ function searchItems({ q, category, kind }) {
       users.display_name AS owner_name
     FROM items
     JOIN users ON users.id = items.user_id
-    WHERE items.status != 'removed'
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY items.created_at DESC
+    LIMIT 50
   `;
 
-  if (q) {
-    sql += ` AND items.title || ' ' || items.description || ' ' || items.location LIKE '%${q}%'`;
-  }
-
-  if (category && category !== "all") {
-    sql += ` AND items.category = '${category}'`;
-  }
-
-  if (kind && kind !== "all") {
-    sql += ` AND items.kind = '${kind}'`;
-  }
-
-  sql += " ORDER BY items.created_at DESC LIMIT 50";
-  return db.prepare(sql).all();
+  return db.prepare(sql).all(...params);
 }
 
 router.get("/", (req, res) => {
